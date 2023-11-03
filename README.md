@@ -30,3 +30,9 @@ docker-compose up -d
 you will be asked about the wallet encryption key and how to setup the seed phrase. Backup them all carefully offline.
 
 - that's it
+- connect to the server with
+
+```
+https://YOURVPSIP:8443
+```
+or better use nginx with a own domain name
