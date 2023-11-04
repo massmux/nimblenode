@@ -11,4 +11,6 @@ services:
         entrypoint: /app/entrypoint.sh
         environment:
             CHOSENPASSWORD: changeme
+        ports:
+          - 8443:8443
 
