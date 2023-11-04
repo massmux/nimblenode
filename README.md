@@ -4,6 +4,9 @@ setup a LND neutrino node in seconds on a tiny VPS.
 
 ## Install and run
 
+Register a domain name and point the DNS A record to the VPS's public IP. Don't start the procedure until the zone is propagated.
+
+
 ```
 git clone https://github.com/massmux/lnd-fastnode
 ```
@@ -30,9 +33,8 @@ docker-compose up -d
 you will be asked about the wallet encryption key and how to setup the seed phrase. Backup them all carefully offline.
 
 - that's it
-- connect to the server with
+- after around 20minutes, connect to the server with
 
 ```
-https://YOURVPSIP:8443
+https://your-domain-name:8443
 ```
-or better use nginx with a own domain name
