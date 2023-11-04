@@ -4,7 +4,7 @@ services:
     lit:
         container_name: lit
         hostname: lit
-        image: massmux/lit:0.12.0-alpha
+        image: massmux/lit:v0.12.0-alpha
         restart: on-failure
         volumes:
           - ${PWD}/.lit:/root/.lit
