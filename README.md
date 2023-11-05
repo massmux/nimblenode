@@ -1,6 +1,6 @@
 # Nimble Node
 
-Setup a Neutrino node with LIT and Letsencrypt in seconds on a tiny VPS
+Setup a Lightning Neutrino node with LIT and Letsencrypt in seconds on a tiny VPS
 
 ## Install and run
 
