@@ -44,3 +44,4 @@ IMPORTANT: if you stop the docker container and restart you need to unlock your 
 ./unlock.sh
 ```
 
+Tested with [Tritema](https://tritema.ch) VPS. The base version is ok.
