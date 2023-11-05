@@ -11,6 +11,8 @@ services:
         entrypoint: /app/entrypoint.sh
         environment:
             CHOSENPASSWORD: changeme
+            SETALIAS: myalias
+            SETHOST: your.domain.com
         ports:
           - 8443:8443
           - 10009:10009

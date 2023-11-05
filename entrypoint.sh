@@ -13,8 +13,12 @@ error() {
 # setting timezone
 echo "export TZ=\"/usr/share/zoneinfo/Europe/Zurich\"" >>  ~/.bashrc
 
+
 cd /root/.lit
 sed -i "s/uipassword=UIPSW/uipassword=$CHOSENPASSWORD/g" lit.conf
+sed -i "s/lnd.alias=ALIAS/lnd.alias=$SETALIAS/g" lit.conf
+sed -i "s/lnd.externalip=THEHOST/lnd.externalip=$SETHOST/g" lit.conf
+sed -i "s/letsencrypthost=THEHOST/letsencrypthost=$SETHOST/g" lit.conf
 
 cd /app
 # run the software

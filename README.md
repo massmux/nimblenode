@@ -4,18 +4,17 @@ setup a LND neutrino node in seconds on a tiny VPS.
 
 ## Install and run
 
-Register a domain name and point the DNS A record to the VPS's public IP. Don't start the procedure until the zone is propagated.
-
+Register a domain name and point the DNS A record to the VPS's public IP. Don't start the procedure until the zone is propagated and you have a fully qualified domain name which A to your VPS
 
 ```
 git clone https://github.com/massmux/lnd-fastnode
 ```
 
-- edit docker-compose.yml setting the UI password
+- edit docker-compose.yml setting: 1) the UI password, 2) your node's ALIAS, 3) your full hostname
 - pull the image
 
 ```
-docker pull massmux/lit
+docker pull massmux/lit:v0.12.0-alpha
 ```
 
 - run the container
@@ -38,3 +37,10 @@ you will be asked about the wallet encryption key and how to setup the seed phra
 ```
 https://your-domain-name:8443
 ```
+
+IMPORTANT: if you stop the docker container and restart you need to unlock your wallet with command
+
+```
+./unlock.sh
+```
+
