@@ -1,6 +1,6 @@
-# LND-Fastnode
+# Nimble Node
 
-setup a LND neutrino node in seconds on a tiny VPS.
+Setup a Neutrino node with LIT and Letsencrypt in seconds on a tiny VPS
 
 ## Install and run
 
@@ -17,22 +17,22 @@ git clone https://github.com/massmux/lnd-fastnode
 docker pull massmux/lit:v0.12.0-alpha
 ```
 
-- run the container
+- Run the container
 
 ```
 cd lnd-fastnode
 docker-compose up -d
 ```
-- create the wallet
+- Create the wallet
 
 ```
 ./create.sh
 ```
 
-you will be asked about the wallet encryption key and how to setup the seed phrase. Backup them all carefully offline.
+You will be asked about the wallet encryption key and how to setup the seed phrase. Backup them all carefully offline.
 
 - that's it
-- after around 20minutes, connect to the server with
+- after around 20minutes, connect to the server with:
 
 ```
 https://your-domain-name:8443
