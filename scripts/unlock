@@ -1,4 +1,4 @@
 #!/bin/bash
 
-echo "Unlock wallet .."
+echo "Unlock existing Wallet .."
 docker exec -ti lit /app/lncli unlock

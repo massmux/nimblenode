@@ -1,4 +1,4 @@
 #!/bin/bash
 
-echo "Create wallet .."
+echo "Create Wallet .."
 docker exec -ti lit /app/lncli create
