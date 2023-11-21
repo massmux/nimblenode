@@ -15,10 +15,21 @@ echo "export TZ=\"/usr/share/zoneinfo/Europe/Zurich\"" >>  ~/.bashrc
 
 
 cd /root/.lit
-sed -i "s/uipassword=UIPSW/uipassword=$CHOSENPASSWORD/g" lit.conf
-sed -i "s/lnd.alias=ALIAS/lnd.alias=$SETALIAS/g" lit.conf
-sed -i "s/lnd.externalip=THEHOST/lnd.externalip=$SETHOST/g" lit.conf
-sed -i "s/letsencrypthost=THEHOST/letsencrypthost=$SETHOST/g" lit.conf
+
+echo "httpslisten=0.0.0.0:8443
+uipassword=$CHOSENPASSWORD
+lnd-mode=integrated
+lnd.bitcoin.active=1
+lnd.bitcoin.mainnet=1
+lnd.bitcoin.node=neutrino
+lnd.feeurl=https://nodes.lightning.computer/fees/v1/btc-fee-estimates.json
+lnd.protocol.option-scid-alias=true
+lnd.protocol.zero-conf=true
+lnd.alias=$SETALIAS
+lnd.externalip=$THEHOST
+letsencrypt=true
+letsencrypthost=$THEHOST
+" > lit.conf
 
 cd /app
 # run the software
