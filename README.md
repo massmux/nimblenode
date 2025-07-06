@@ -45,4 +45,15 @@ IMPORTANT: if you stop the docker container and restart you need to unlock your 
 ./scripts/unlock
 ```
 
+## Maintenance
+
+Just connect to your running container with
+
+```
+docker exec -ti lit bash
+```
+
+then you can access the lncli command as usual to manage your node from the command line.
+
+
 Tested with [Tritema](https://tritema.ch) VPS. The base version is ok.
