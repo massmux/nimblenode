@@ -1,3 +1,5 @@
 lit.tls
 lit.key
+.lit
 mainnet
+docker-compose.yml

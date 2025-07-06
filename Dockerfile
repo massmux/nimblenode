@@ -1,6 +1,6 @@
 FROM ubuntu:22.04
 
-ARG version="v0.12.0-alpha"
+ARG version="v0.15.0-alpha"
 
 
 RUN     apt-get update && \

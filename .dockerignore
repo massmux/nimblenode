@@ -1,3 +1,5 @@
 **/mainnet
 **/lit.tls
 **/lit.key
+.lit
+docker-compose.yml

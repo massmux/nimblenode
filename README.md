@@ -14,7 +14,7 @@ git clone https://github.com/massmux/nimblenode
 - pull the image from dockerhub
 
 ```
-docker pull massmux/lit:v0.12.0-alpha
+docker pull massmux/lit
 ```
 
 - Run the container

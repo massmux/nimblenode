@@ -26,9 +26,9 @@ lnd.feeurl=https://nodes.lightning.computer/fees/v1/btc-fee-estimates.json
 lnd.protocol.option-scid-alias=true
 lnd.protocol.zero-conf=true
 lnd.alias=$SETALIAS
-lnd.externalip=$THEHOST
+lnd.externalip=$SETHOST
 letsencrypt=true
-letsencrypthost=$THEHOST
+letsencrypthost=$SETHOST
 " > lit.conf
 
 cd /app

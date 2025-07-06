@@ -10,9 +10,9 @@ services:
           - ${PWD}/.lit:/root/.lit
         entrypoint: /app/entrypoint.sh
         environment:
-            CHOSENPASSWORD: FJEHC8dj2gxx
-            SETALIAS: nimble
-            SETHOST: nimble.gwoq.com
+            CHOSENPASSWORD: changeme
+            SETALIAS: youralias
+            SETHOST: your.domain.name
         ports:
           - 8443:8443
           - 10009:10009
