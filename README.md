@@ -33,7 +33,7 @@ docker-compose up -d
 You will be asked about the wallet encryption key and how to setup the seed phrase. Backup them all carefully offline.
 
 - that's it
-- after around 20minutes, connect to the server with:
+- after around 20 minutes, connect to the server with:
 
 ```
 https://your-domain-name:8443
