@@ -1,5 +1,10 @@
 lit.tls
 lit.key
 .lit
+.lnd
+.faraday
+.loop
+.pool
+.tapd 
 mainnet
 docker-compose.yml

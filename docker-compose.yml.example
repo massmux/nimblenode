@@ -8,6 +8,11 @@ services:
         restart: on-failure
         volumes:
           - ${PWD}/.lit:/root/.lit
+	  - ${PWD}/.lnd:/root/.lnd
+          - ${PWD}/.faraday:/root/.faraday
+          - ${PWD}/.loop:/root/.loop
+          - ${PWD}/.pool:/root/.pool
+          - ${PWD}/.tapd:/root/.tapd
         entrypoint: /app/entrypoint.sh
         environment:
             CHOSENPASSWORD: changeme
