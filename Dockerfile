@@ -22,7 +22,11 @@ RUN 	cd /app && \
 EXPOSE 8443 10009 9735
 
 VOLUME /root/.lnd
-
+VOLUME /root/.lit
+VOLUME /root/.loop
+VOLUME /root/.faraday
+VOLUME /root/.tapd
+VOLUME /root/.pool
 
 CMD [ "./entrypoint.sh" ]
 

@@ -18,6 +18,9 @@ cd /root/.lit
 
 echo "httpslisten=0.0.0.0:8443
 uipassword=$CHOSENPASSWORD
+lnd.rpclisten=0.0.0.0:10009
+lnd.listen=0.0.0.0:9735
+lnd.tlsextraip=0.0.0.0
 lnd-mode=integrated
 lnd.bitcoin.active=1
 lnd.bitcoin.mainnet=1
