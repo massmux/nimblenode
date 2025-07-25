@@ -8,7 +8,7 @@ services:
         restart: on-failure
         volumes:
           - ${PWD}/.lit:/root/.lit
-	  - ${PWD}/.lnd:/root/.lnd
+          - ${PWD}/.lnd:/root/.lnd
           - ${PWD}/.faraday:/root/.faraday
           - ${PWD}/.loop:/root/.loop
           - ${PWD}/.pool:/root/.pool
@@ -16,10 +16,30 @@ services:
         entrypoint: /app/entrypoint.sh
         environment:
             CHOSENPASSWORD: changeme
-            SETALIAS: youralias
-            SETHOST: your.domain.name
+            SETALIAS: yournodealias
+            SETHOST: yournodeFQDM
         ports:
           - 8443:8443
           - 10009:10009
           - 9735:9735
           - 80:80
+        networks:
+                - lan
+
+    bos:
+        image: alexbosworth/balanceofsatoshis
+        hostname: bos
+        volumes:
+          - ${PWD}/.lnd:/home/node/.lnd
+          - ${PWD}/.bos:/home/node/.bos
+        container_name: bos
+        entrypoint: ""
+        command: ["sleep", "infinity"]  # Or override CMD
+        networks:
+                - lan
+
+
+networks:
+  lan:
+    driver: bridge
+

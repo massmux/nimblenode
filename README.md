@@ -44,6 +44,23 @@ IMPORTANT: if you stop the docker container and restart you need to unlock your 
 ```
 ./scripts/unlock
 ```
+## BOS
+
+Balance of Satoshis (BOS) is now preinstalled. you can use it by entering the container with
+
+```
+docker exec -ti bos bash
+```
+then you can access the bos command in the local directory. Please bear in mind that you must configure the configuration file located in
+
+```
+.bos/YOURNODENAME/credentials.json
+```
+to get the content of this configuration file automatically, just run the command
+
+```
+./scripts/grpc
+```
 
 ## Maintenance
 
