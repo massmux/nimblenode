@@ -2,7 +2,7 @@
 
 echo "Get connection info .."
 
-cert=$(base64 -w0 ../.lnd/tls.cert)
+cert=$(base64 -w0 .lnd/tls.cert)
 macaroon=$(base64 -w0 .lnd/data/chain/bitcoin/mainnet/admin.macaroon)
 echo "{
 	\"cert\":\"$cert\",
