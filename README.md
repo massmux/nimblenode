@@ -56,10 +56,10 @@ then you can access the bos command in the local directory. Please bear in mind 
 ```
 .bos/YOURNODENAME/credentials.json
 ```
-to get the content of this configuration file automatically, just run the command
+to get this file automatically configured, just run the command. NB: You must execute this script only after created the LND Wallet (with /scripts/create).
 
 ```
-./scripts/grpc
+./scripts/initbos
 ```
 
 ## Maintenance
