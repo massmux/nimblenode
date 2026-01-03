@@ -2,3 +2,4 @@
 
 echo "Create Wallet .."
 docker exec -ti lit /app/lncli create
+sudo chown -R dev:dev .lnd/data/chain/bitcoin/mainnet/*
