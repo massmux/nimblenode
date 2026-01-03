@@ -1,0 +1,41 @@
+#!/bin/bash
+
+# docker-compose file
+FILE="./docker-compose.yml"
+
+# check if file exists
+if [ ! -f "$FILE" ]; then
+    echo "Error: $FILE not found"
+    exit 1
+fi
+
+# check if macaroon exists
+if [ ! -f ".lnd/data/chain/bitcoin/mainnet/admin.macaroon" ]; then
+    echo "Error: macaroon file not found"
+    exit 1
+fi
+
+
+# get value for SETALIAS
+SETALIAS=$(grep "SETALIAS:" "$FILE" | sed 's/.*SETALIAS: *//' | tr -d ' ')
+
+# check if a value is found
+if [ -z "$SETALIAS" ]; then
+    echo "Error: SETALIAS was not found in file!"
+    exit 1
+fi
+
+# calculate base64 values
+cert=$(base64 -w0 .lnd/tls.cert)
+macaroon=$(base64 -w0 .lnd/data/chain/bitcoin/mainnet/admin.macaroon)
+
+OUTPUT_FILE="./.bos/$SETALIAS/credentials.json"
+
+cat > "$OUTPUT_FILE" <<EOF
+{
+        "cert":"$cert",
+        "macaroon":"$macaroon",
+        "socket":"lit:10009"
+}
+EOF
+

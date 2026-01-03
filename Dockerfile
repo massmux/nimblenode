@@ -1,8 +1,6 @@
 FROM debian:12.6-slim
-#FROM ubuntu:22.04
 
-
-ARG version="v0.15.0-alpha"
+ARG version="v0.16.0-alpha"
 
 
 RUN     apt-get update && \
