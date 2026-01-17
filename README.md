@@ -47,15 +47,16 @@ IMPORTANT: if you stop the docker container and restart you need to unlock your 
 
 ## BOS
 
-Balance of Satoshis (BOS) is now preinstalled. you can use it by entering the container with
-
-```
-docker exec -ti bos bash
-```
-to get this file automatically configured, just run the command. NB: You must execute this script only after created the LND Wallet (with /scripts/create).
+Balance of Satoshis (BOS) is preinstalled. To get this tool automatically configured, just run the command below. NB: You must execute this script only after created the LND Wallet (with /scripts/create).
 
 ```
 ./scripts/initbos
+```
+
+then you can use the tool by entering the container:
+
+```
+docker exec -ti bos bash
 ```
 
 ## Maintenance
@@ -65,6 +66,7 @@ Just connect to your running container with
 ```
 docker exec -ti lit bash
 ```
+
 then you can access the lncli command as usual to manage your node from the command line.
 
 ## Reset the node
@@ -76,5 +78,4 @@ This will completely whipeout your node and all lightning data (so be sure to ha
 ```
 
 
-
-The whole system is fully available and configured on [DENALI](https://denali.pro) Lightning Node (LN2) VPS.
+The whole system is available and configured on [DENALI](https://denali.pro) Lightning Node (LN2) VPS.
