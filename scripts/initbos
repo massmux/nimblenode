@@ -1,43 +1,202 @@
 #!/bin/bash
 
-# docker-compose file
-FILE="./docker-compose.yml"
+###############################################################################
+# Nimble Node - Balance of Satoshis (BOS) Initialization Script
+# 
+# This script initializes Balance of Satoshis by:
+# 1. Extracting the node alias from docker-compose.yml
+# 2. Creating the BOS configuration directory
+# 3. Generating credentials.json with TLS certificate and macaroon
+#
+# Prerequisites:
+# - LND wallet must be created (run ./scripts/create first)
+# - Docker containers must be running
+###############################################################################
 
-# check if file exists
-if [ ! -f "$FILE" ]; then
-    echo "Error: $FILE not found"
+set -e  # Exit immediately if a command exits with a non-zero status
+
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
+# Function to print colored messages
+print_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+print_step() {
+    echo -e "${CYAN}[STEP]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+###############################################################################
+# Step 1: Verify root privileges
+###############################################################################
+print_step "Checking root privileges..."
+
+if [ "$EUID" -ne 0 ]; then 
+    print_error "This script must be run as root"
+    print_info "Please run: sudo $0"
     exit 1
 fi
 
-# check if macaroon exists
-if [ ! -f ".lnd/data/chain/bitcoin/mainnet/admin.macaroon" ]; then
-    echo "Error: macaroon file not found"
+print_success "Root privileges verified"
+echo ""
+
+###############################################################################
+# Step 2: Check if docker-compose.yml exists
+###############################################################################
+print_step "Checking for docker-compose.yml..."
+
+COMPOSE_FILE="./docker-compose.yml"
+
+if [ ! -f "$COMPOSE_FILE" ]; then
+    print_error "File not found: $COMPOSE_FILE"
+    print_info "Please ensure you are in the nimblenode directory"
+    print_info "Current directory: $(pwd)"
     exit 1
 fi
 
+print_success "Found docker-compose.yml"
+echo ""
 
-# get value for SETALIAS
-SETALIAS=$(grep "SETALIAS:" "$FILE" | sed 's/.*SETALIAS: *//' | tr -d ' ')
+###############################################################################
+# Step 3: Check if admin macaroon exists
+###############################################################################
+print_step "Checking for LND admin macaroon..."
 
-# check if a value is found
+MACAROON_FILE=".lnd/data/chain/bitcoin/mainnet/admin.macaroon"
+
+if [ ! -f "$MACAROON_FILE" ]; then
+    print_error "Admin macaroon not found: $MACAROON_FILE"
+    print_info "This file is created when you create your LND wallet"
+    print_info "Please run ./scripts/create first to create your wallet"
+    exit 1
+fi
+
+print_success "Found admin macaroon"
+echo ""
+
+###############################################################################
+# Step 4: Check if TLS certificate exists
+###############################################################################
+print_step "Checking for LND TLS certificate..."
+
+TLS_CERT_FILE=".lnd/tls.cert"
+
+if [ ! -f "$TLS_CERT_FILE" ]; then
+    print_error "TLS certificate not found: $TLS_CERT_FILE"
+    print_info "This file should be created automatically by LND"
+    print_info "Please ensure your node is running properly"
+    exit 1
+fi
+
+print_success "Found TLS certificate"
+echo ""
+
+###############################################################################
+# Step 5: Extract node alias from docker-compose.yml
+###############################################################################
+print_step "Extracting node alias from docker-compose.yml..."
+
+# Extract SETALIAS value from docker-compose.yml
+SETALIAS=$(grep "SETALIAS:" "$COMPOSE_FILE" | sed 's/.*SETALIAS: *//' | tr -d ' ' | tr -d '"' | tr -d "'")
+
+# Check if a value was found
 if [ -z "$SETALIAS" ]; then
-    echo "Error: SETALIAS was not found in file!"
+    print_error "SETALIAS not found in $COMPOSE_FILE"
+    print_info "Please ensure your docker-compose.yml contains a SETALIAS setting"
+    print_info "Example: SETALIAS: YourNodeName"
     exit 1
 fi
 
-DIR="./.bos/$SETALIAS"
+print_success "Node alias found: $SETALIAS"
+echo ""
 
-# Check if the dir exists
-if [ ! -d "$DIR" ]; then
-    # create node dir
-    mkdir -p "$DIR"
+###############################################################################
+# Step 6: Create BOS configuration directory
+###############################################################################
+print_step "Creating BOS configuration directory..."
+
+BOS_DIR="./.bos"
+NODE_DIR="./.bos/$SETALIAS"
+
+# Create base BOS directory if it doesn't exist
+if [ ! -d "$BOS_DIR" ]; then
+    print_info "Creating directory: $BOS_DIR"
+    if mkdir -p "$BOS_DIR"; then
+        print_success "Created $BOS_DIR"
+    else
+        print_error "Failed to create directory: $BOS_DIR"
+        exit 1
+    fi
+else
+    print_info "Directory already exists: $BOS_DIR"
 fi
 
-# calculate base64 values
-cert=$(base64 -w0 .lnd/tls.cert)
-macaroon=$(base64 -w0 .lnd/data/chain/bitcoin/mainnet/admin.macaroon)
+# Create node-specific directory if it doesn't exist
+if [ ! -d "$NODE_DIR" ]; then
+    print_info "Creating directory: $NODE_DIR"
+    if mkdir -p "$NODE_DIR"; then
+        print_success "Created $NODE_DIR"
+    else
+        print_error "Failed to create directory: $NODE_DIR"
+        exit 1
+    fi
+else
+    print_info "Directory already exists: $NODE_DIR"
+fi
 
-OUTPUT_FILE="./.bos/$SETALIAS/credentials.json"
+echo ""
+
+###############################################################################
+# Step 7: Encode certificate and macaroon to base64
+###############################################################################
+print_step "Encoding certificate and macaroon to base64..."
+
+print_info "Processing TLS certificate..."
+cert=$(base64 -w0 "$TLS_CERT_FILE")
+
+if [ -z "$cert" ]; then
+    print_error "Failed to encode TLS certificate"
+    exit 1
+fi
+print_success "TLS certificate encoded"
+
+print_info "Processing admin macaroon..."
+macaroon=$(base64 -w0 "$MACAROON_FILE")
+
+if [ -z "$macaroon" ]; then
+    print_error "Failed to encode admin macaroon"
+    exit 1
+fi
+print_success "Admin macaroon encoded"
+
+echo ""
+
+###############################################################################
+# Step 8: Create credentials.json file
+###############################################################################
+print_step "Creating BOS credentials file..."
+
+OUTPUT_FILE="$NODE_DIR/credentials.json"
+
+print_info "Writing credentials to: $OUTPUT_FILE"
 
 cat > "$OUTPUT_FILE" <<EOF
 {
@@ -47,3 +206,72 @@ cat > "$OUTPUT_FILE" <<EOF
 }
 EOF
 
+if [ $? -eq 0 ]; then
+    print_success "Credentials file created successfully"
+else
+    print_error "Failed to create credentials file"
+    exit 1
+fi
+
+echo ""
+
+###############################################################################
+# Step 9: Set proper ownership for BOS directory
+###############################################################################
+print_step "Setting proper ownership for BOS directory..."
+
+print_info "Changing ownership to dev:dev for $BOS_DIR"
+
+if chown -R dev:dev "$BOS_DIR"; then
+    print_success "Ownership updated successfully"
+else
+    print_warning "Failed to update ownership (continuing anyway)"
+    print_info "You may need to manually adjust permissions"
+fi
+
+echo ""
+
+###############################################################################
+# Step 10: Verify the configuration
+###############################################################################
+print_step "Verifying BOS configuration..."
+
+if [ -f "$OUTPUT_FILE" ]; then
+    FILE_SIZE=$(stat -f%z "$OUTPUT_FILE" 2>/dev/null || stat -c%s "$OUTPUT_FILE" 2>/dev/null)
+    
+    if [ "$FILE_SIZE" -gt 100 ]; then
+        print_success "Configuration file appears valid (size: $FILE_SIZE bytes)"
+    else
+        print_warning "Configuration file seems unusually small (size: $FILE_SIZE bytes)"
+    fi
+else
+    print_error "Configuration file not found after creation"
+    exit 1
+fi
+
+echo ""
+
+###############################################################################
+# Completion message
+###############################################################################
+echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${GREEN}      BALANCE OF SATOSHIS INITIALIZED SUCCESSFULLY!      ${NC}"
+echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+print_info "Configuration details:"
+echo "  Node alias:       $SETALIAS"
+echo "  Credentials file: $OUTPUT_FILE"
+echo "  Socket:           lit:10009"
+echo ""
+print_info "To use Balance of Satoshis (BOS):"
+echo ""
+echo "  1. Enter the BOS container:"
+echo "     $ docker exec -ti bos bash"
+echo ""
+echo "  2. Run BOS commands from the local directory:"
+echo "     $ ./bos --help"
+echo "     $ ./bos balance"
+echo "     $ ./bos forwards"
+echo ""
+print_warning "Note: BOS commands must be run from inside the container"
+echo ""

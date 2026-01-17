@@ -1,0 +1,149 @@
+#!/bin/bash
+
+###############################################################################
+# Nimble Node Reset Script
+# 
+# This script performs a complete reset of the Lightning node by:
+# 1. Verifying root privileges
+# 2. Stopping docker containers
+# 3. Removing all containers
+# 4. Deleting all Lightning network data directories
+#
+# WARNING: This operation is destructive and will delete all node data
+# including wallets, channels, and configuration. Make sure you have
+# backed up your seed phrase and any important data before proceeding.
+###############################################################################
+
+set -e  # Exit immediately if a command exits with a non-zero status
+
+# Color codes for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Function to print colored messages
+print_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+###############################################################################
+# Step 1: Verify root privileges
+###############################################################################
+if [ "$EUID" -ne 0 ]; then 
+    print_error "This script must be run as root"
+    print_info "Please run: sudo $0"
+    exit 1
+fi
+
+print_info "Root privileges verified"
+
+###############################################################################
+# Confirmation prompt
+###############################################################################
+print_warning "This will completely reset your Nimble Node!"
+print_warning "All Lightning Network data will be deleted, including:"
+echo "  - LIT configuration"
+echo "  - LND wallet and channels"
+echo "  - Faraday data"
+echo "  - Loop data"
+echo "  - Pool data"
+echo "  - Taproot Assets data"
+echo "  - Balance of Satoshis configuration"
+echo ""
+read -p "Are you sure you want to continue? (yes/no): " -r
+echo
+if [[ ! $REPLY =~ ^[Yy][Ee][Ss]$ ]]; then
+    print_info "Reset operation cancelled"
+    exit 0
+fi
+
+###############################################################################
+# Step 2: Navigate to nimblenode directory and stop docker
+###############################################################################
+NIMBLE_DIR="nimblenode"
+
+# Check if we're already in the nimblenode directory
+if [ -f "docker-compose.yml" ] && [ -d "scripts" ]; then
+    print_info "Already in nimblenode directory"
+else
+    # Try to find and navigate to the nimblenode directory
+    if [ -d "$NIMBLE_DIR" ]; then
+        cd "$NIMBLE_DIR"
+        print_info "Changed to $NIMBLE_DIR directory"
+    elif [ -d "$HOME/$NIMBLE_DIR" ]; then
+        cd "$HOME/$NIMBLE_DIR"
+        print_info "Changed to $HOME/$NIMBLE_DIR directory"
+    else
+        print_error "Cannot find nimblenode directory"
+        print_info "Please run this script from the nimblenode directory or its parent"
+        exit 1
+    fi
+fi
+
+# Verify docker-compose.yml exists
+if [ ! -f "docker-compose.yml" ]; then
+    print_error "docker-compose.yml not found in current directory"
+    print_info "Current directory: $(pwd)"
+    exit 1
+fi
+
+print_info "Stopping docker containers..."
+docker compose stop || {
+    print_warning "Failed to stop containers gracefully, forcing down..."
+    docker compose down
+}
+
+###############################################################################
+# Step 3: Remove all containers
+###############################################################################
+print_info "Removing all containers..."
+docker compose rm -f || {
+    print_error "Failed to remove containers"
+    exit 1
+}
+
+###############################################################################
+# Step 4: Remove Lightning Network data directories
+###############################################################################
+print_info "Removing Lightning Network data directories..."
+
+DIRS_TO_REMOVE=(".lit" ".lnd" ".faraday" ".loop" ".pool" ".tapd" ".bos")
+
+for dir in "${DIRS_TO_REMOVE[@]}"; do
+    if [ -d "$dir" ]; then
+        rm -rf "$dir"
+        print_info "Removed directory: $dir"
+    else
+        print_warning "Directory not found (skipping): $dir"
+    fi
+done
+
+###############################################################################
+# Completion message
+###############################################################################
+echo ""
+print_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+print_info "Node reset completed successfully!"
+print_info "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo ""
+echo "Next steps:"
+echo "  1. Start docker containers:"
+echo "     $ docker compose up -d"
+echo ""
+echo "  2. Create a new wallet:"
+echo "     $ ./scripts/create"
+echo ""
+echo "  3. Initialize Balance of Satoshis (optional):"
+echo "     $ ./scripts/initbos"
+echo ""
+print_warning "Remember to backup your new seed phrase and encryption key!"
+echo ""

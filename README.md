@@ -17,11 +17,11 @@ git clone https://github.com/massmux/nimblenode
 docker pull massmux/lit
 ```
 
-- Run the container
+- Run the containers
 
 ```
 cd nimblenode
-docker-compose up -d
+docker compose up -d
 ```
 
 - Create the wallet. first usage
@@ -44,17 +44,13 @@ IMPORTANT: if you stop the docker container and restart you need to unlock your 
 ```
 ./scripts/unlock
 ```
+
 ## BOS
 
 Balance of Satoshis (BOS) is now preinstalled. you can use it by entering the container with
 
 ```
 docker exec -ti bos bash
-```
-then you can access the bos command in the local directory. Please bear in mind that you must configure the configuration file located in
-
-```
-.bos/YOURNODENAME/credentials.json
 ```
 to get this file automatically configured, just run the command. NB: You must execute this script only after created the LND Wallet (with /scripts/create).
 
@@ -69,8 +65,16 @@ Just connect to your running container with
 ```
 docker exec -ti lit bash
 ```
-
 then you can access the lncli command as usual to manage your node from the command line.
 
+## Reset the node
 
-Tested with [Tritema](https://tritema.ch) VPS. The base version is ok.
+This will completely whipeout your node and all lightning data (so be sure to have a backup or to have emptied all your funds). This is nice to redo the stuff from the beginning or to create a fresh node.
+
+```
+./scripts/reset
+```
+
+
+
+The whole system is fully available and configured on [DENALI](https://denali.pro) Lightning Node (LN2) VPS.
