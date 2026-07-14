@@ -1,0 +1,141 @@
+#!/bin/bash
+
+###############################################################################
+# Nimble Node - Update container images
+#
+# Pulls the latest images for the running stack and recreates only the
+# containers whose image actually changed. It then:
+#   - reports whether LND came back up or needs unlocking
+#   - runs refreshcreds (idempotent) in case LND regenerated its TLS cert
+#   - optionally prunes the old, now-dangling images
+#
+# It does NOT touch your .env, wallet or data. It also does NOT run "git pull":
+# if you want newer docker-compose.yml / scripts, update the repo separately
+# first, then run this to apply the new images.
+###############################################################################
+
+set -e  # Exit immediately if a command exits with a non-zero status
+
+# Load shared helpers (color output, ownership resolution)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/common.sh"
+
+# Always operate from the project root so relative paths (.env, .lnd, ...) work
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
+
+# Ask a yes/no question; returns success on yes
+confirm() {
+    local reply
+    read -rp "$1 [y/N]: " reply
+    [[ "$reply" =~ ^[Yy]([Ee][Ss])?$ ]]
+}
+
+###############################################################################
+# Step 1: Verify root privileges
+###############################################################################
+print_step "Checking root privileges..."
+
+if [ "$EUID" -ne 0 ]; then
+    print_error "This script must be run as root"
+    print_info "Please run: sudo $0"
+    exit 1
+fi
+
+print_success "Root privileges verified"
+echo ""
+
+###############################################################################
+# Step 2: Verify Docker Compose
+###############################################################################
+if ! docker compose version >/dev/null 2>&1; then
+    print_error "The Docker Compose plugin is not available"
+    exit 1
+fi
+
+###############################################################################
+# Step 3: Pull the latest images
+###############################################################################
+print_step "Pulling the latest images..."
+
+# Honors COMPOSE_PROFILES from .env, so the tor image is included in
+# hybrid / tor modes and skipped on clearnet.
+if docker compose pull; then
+    print_success "Images up to date"
+else
+    print_error "Failed to pull images (check network/registry access)"
+    exit 1
+fi
+echo ""
+
+###############################################################################
+# Step 4: Recreate the containers whose image changed
+###############################################################################
+print_step "Recreating containers with the new images..."
+
+# up -d only recreates services whose image (or config) actually changed.
+if docker compose up -d; then
+    print_success "Containers recreated"
+else
+    print_error "Failed to recreate containers"
+    print_info "Check the output above and try: docker compose up -d"
+    exit 1
+fi
+echo ""
+
+# Give LND a moment to come back before probing it.
+sleep 5
+
+###############################################################################
+# Step 5: Check (and optionally unlock) the LND wallet
+###############################################################################
+# Do this BEFORE refreshcreds: if the cert changed, refreshcreds restarts
+# BOS/ThunderHub, and we want LND already unlocked so they reconnect cleanly.
+print_step "Checking the LND wallet..."
+
+if docker exec lit /app/lncli getinfo >/dev/null 2>&1; then
+    print_success "LND is responsive (wallet unlocked)"
+else
+    print_warning "LND is not responding (the wallet is likely locked after restart)"
+    if confirm "Unlock the LND wallet now?"; then
+        # scripts/unlock is interactive: it asks for the wallet password.
+        "$SCRIPT_DIR/unlock" || print_warning "unlock did not complete"
+        # Give LND a moment to finish coming up after unlocking.
+        sleep 3
+    else
+        print_info "Skipped. Unlock later with: sudo ./scripts/unlock"
+        print_info "BOS/ThunderHub will reconnect once LND is unlocked."
+    fi
+fi
+echo ""
+
+###############################################################################
+# Step 6: Refresh embedded credentials (idempotent)
+###############################################################################
+# If the lit update caused LND to regenerate tls.cert, BOS/ThunderHub would
+# stop connecting. refreshcreds is idempotent: it re-embeds the current
+# cert/macaroon and restarts the affected containers ONLY when the cert
+# actually changed; otherwise it reports "nothing to do" and touches nothing.
+print_step "Refreshing BOS/ThunderHub credentials if needed..."
+"$SCRIPT_DIR/refreshcreds" || print_warning "refreshcreds did not complete (run it manually if BOS/ThunderHub misbehave)"
+echo ""
+
+###############################################################################
+# Step 7: Optional cleanup
+###############################################################################
+if confirm "Remove old, now-unused images to free disk space?"; then
+    docker image prune -f
+    print_success "Old images removed"
+fi
+echo ""
+
+###############################################################################
+# Completion message
+###############################################################################
+echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${GREEN}                 UPDATE COMPLETE!                       ${NC}"
+echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo ""
+print_info "Current container status:"
+docker compose ps
+echo ""

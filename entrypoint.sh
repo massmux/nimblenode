@@ -43,6 +43,7 @@ lnd.feeurl=https://nodes.lightning.computer/fees/v1/btc-fee-estimates.json
 lnd.protocol.option-scid-alias=true
 lnd.protocol.zero-conf=true
 lnd.alias=${SETALIAS}
+lnd.rpcmiddleware.enable=true
 EOF
 
 # Network privacy mode. Defaults to clearnet to preserve the previous behaviour
