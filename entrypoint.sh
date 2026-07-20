@@ -42,6 +42,9 @@ lnd.bitcoin.node=neutrino
 lnd.feeurl=https://nodes.lightning.computer/fees/v1/btc-fee-estimates.json
 lnd.protocol.option-scid-alias=true
 lnd.protocol.zero-conf=true
+lnd.protocol.wumbo-channels=true
+lnd.minchansize=1000000
+databasebackend=bbolt
 lnd.alias=${SETALIAS}
 EOF
 
