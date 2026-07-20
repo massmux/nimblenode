@@ -13,9 +13,9 @@ COPY	./entrypoint.sh /app/entrypoint.sh
 WORKDIR /app
 
 RUN 	cd /app && \
-	wget https://github.com/lightninglabs/lightning-terminal/releases/download/$version/lightning-terminal-linux-386-$version.tar.gz && \
-	tar xzvf lightning-terminal-linux-386-$version.tar.gz && \
-	mv lightning-terminal-linux-386-$version/* .
+	wget https://github.com/lightninglabs/lightning-terminal/releases/download/$version/lightning-terminal-linux-amd64-$version.tar.gz && \
+	tar xzvf lightning-terminal-linux-amd64-$version.tar.gz && \
+	mv lightning-terminal-linux-amd64-$version/* .
 
 EXPOSE 8443 10009 9735
 
