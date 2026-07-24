@@ -29,6 +29,11 @@ Setup:
   create             Create the LND wallet (first run)
   reset              Full reset of the node (destructive)
 
+Containers:
+  status             Show the status of all containers
+  start              Start all containers (docker compose up -d)
+  stop               Stop all containers without removing them or their data
+
 Services:
   bos <args...>      Balance of Satoshis wrapper (e.g. nimblenode bos balance)
   initbos            Initialize Balance of Satoshis
@@ -54,7 +59,7 @@ run_command() {
     local cmd="$1"
     shift
     case "$cmd" in
-        install|create|reset|initbos|initbostelegram|initthub|mkmacaroon|refreshcreds|bos|getinfo|unlock|grpc|logs)
+        install|create|reset|initbos|initbostelegram|initthub|mkmacaroon|refreshcreds|bos|getinfo|unlock|grpc|logs|status|start|stop)
             "$SCRIPT_DIR/$cmd" "$@"
             ;;
         help|-h|--help)

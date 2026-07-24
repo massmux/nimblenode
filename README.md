@@ -14,6 +14,9 @@ All the scripts under `scripts/` are also available as subcommands of a single `
 ./scripts/nimblenode logs           # last 50 lines of the lit container
 ./scripts/nimblenode logs bos       # last 50 lines of the bos container
 ./scripts/nimblenode logs bos 200   # last 200 lines of the bos container
+./scripts/nimblenode status         # container status (docker compose ps)
+./scripts/nimblenode start          # start all containers (docker compose up -d)
+./scripts/nimblenode stop           # stop all containers, keeping data (docker compose stop)
 ```
 
 To use it as a plain `nimblenode` command, symlink it into your `PATH` (run from the repo root):

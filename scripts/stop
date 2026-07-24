@@ -1,0 +1,15 @@
+#!/bin/bash
+
+###############################################################################
+# Nimble Node - Stop all containers (does not remove them or their data;
+# use `start` to bring them back up)
+###############################################################################
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
+
+echo "Stopping Nimble Node containers .."
+docker compose stop
