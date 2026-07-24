@@ -1,0 +1,47 @@
+#!/bin/bash
+
+###############################################################################
+# Nimble Node - Show the last N lines of a container's logs
+#
+# Usage: logs [service] [lines]
+#   service defaults to "lit"
+#   lines   defaults to 50
+###############################################################################
+
+set -e
+
+VALID_SERVICES=(lit thunderhub nginx-proxy acme-companion bos tor)
+
+is_number() {
+    [[ "$1" =~ ^[0-9]+$ ]]
+}
+
+service="lit"
+lines=50
+
+if [ $# -ge 1 ]; then
+    if is_number "$1"; then
+        lines="$1"
+    else
+        service="$1"
+        [ $# -ge 2 ] && lines="$2"
+    fi
+fi
+
+if ! is_number "$lines"; then
+    echo "Invalid number of lines: $lines" >&2
+    exit 1
+fi
+
+valid=false
+for s in "${VALID_SERVICES[@]}"; do
+    [ "$s" = "$service" ] && valid=true && break
+done
+
+if [ "$valid" != true ]; then
+    echo "Unknown service: $service" >&2
+    echo "Valid services: ${VALID_SERVICES[*]}" >&2
+    exit 1
+fi
+
+docker logs --tail "$lines" "$service"

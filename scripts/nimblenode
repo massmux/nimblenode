@@ -41,6 +41,7 @@ Node:
   grpc               Print gRPC connection info (cert, macaroon, socket)
   mkmacaroon         Generate a custom least-privilege macaroon
   refreshcreds       Re-sync BOS/ThunderHub credentials with the current TLS cert
+  logs [service] [n] Show the last n log lines (service: lit|thunderhub|nginx-proxy|acme-companion|bos|tor, default lit, n default 50)
 
 Other:
   help               Show this help message
@@ -53,7 +54,7 @@ run_command() {
     local cmd="$1"
     shift
     case "$cmd" in
-        install|create|reset|initbos|initbostelegram|initthub|mkmacaroon|refreshcreds|bos|getinfo|unlock|grpc)
+        install|create|reset|initbos|initbostelegram|initthub|mkmacaroon|refreshcreds|bos|getinfo|unlock|grpc|logs)
             "$SCRIPT_DIR/$cmd" "$@"
             ;;
         help|-h|--help)
