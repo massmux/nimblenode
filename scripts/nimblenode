@@ -1,0 +1,100 @@
+#!/bin/bash
+
+###############################################################################
+# Nimble Node - Unified CLI
+#
+# Single entry point that dispatches to the individual scripts in scripts/,
+# so you can run `nimblenode <command> [args...]` instead of
+# `./scripts/<command> [args...]`.
+#
+# Run with no arguments in a terminal to get an interactive shell
+# (`nimblenode> `) where you can type commands one after another.
+###############################################################################
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Always operate from the project root so relative paths (.env, .lnd, ...)
+# work regardless of where the CLI is invoked from.
+cd "$PROJECT_DIR" || exit 1
+
+usage() {
+    cat <<EOF
+Nimble Node CLI
+
+Usage: nimblenode <command> [args...]
+
+Setup:
+  install            Guided installer (checks prerequisites, prepares .env, starts services)
+  create             Create the LND wallet (first run)
+  reset              Full reset of the node (destructive)
+
+Services:
+  bos <args...>      Balance of Satoshis wrapper (e.g. nimblenode bos balance)
+  initbos            Initialize Balance of Satoshis
+  initbostelegram    Connect BOS to a Telegram bot
+  initthub           Initialize ThunderHub
+
+Node:
+  getinfo            Run lncli getinfo
+  unlock             Unlock the wallet after a restart
+  grpc               Print gRPC connection info (cert, macaroon, socket)
+  mkmacaroon         Generate a custom least-privilege macaroon
+  refreshcreds       Re-sync BOS/ThunderHub credentials with the current TLS cert
+
+Other:
+  help               Show this help message
+  exit, quit         Leave the interactive shell
+EOF
+}
+
+# Runs one command; returns its exit status without killing the shell/REPL.
+run_command() {
+    local cmd="$1"
+    shift
+    case "$cmd" in
+        install|create|reset|initbos|initbostelegram|initthub|mkmacaroon|refreshcreds|bos|getinfo|unlock|grpc)
+            "$SCRIPT_DIR/$cmd" "$@"
+            ;;
+        help|-h|--help)
+            usage
+            ;;
+        *)
+            echo "Unknown command: $cmd (type 'help' for the list)" >&2
+            return 1
+            ;;
+    esac
+}
+
+repl() {
+    usage
+    echo
+    echo "Interactive mode. Type a command (e.g. 'bos balance'), 'help', or 'exit'."
+    while true; do
+        if ! read -e -r -p "nimblenode> " line; then
+            echo
+            break
+        fi
+        [ -z "$line" ] && continue
+        history -s -- "$line"
+        read -ra words <<< "$line"
+        case "${words[0]}" in
+            exit|quit)
+                break
+                ;;
+        esac
+        run_command "${words[@]}"
+    done
+}
+
+if [ $# -eq 0 ]; then
+    if [ -t 0 ]; then
+        repl
+        exit 0
+    else
+        usage
+        exit 1
+    fi
+fi
+
+run_command "$@"

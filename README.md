@@ -2,6 +2,47 @@
 
 Setup a Lightning Neutrino Node with LIT and Letsencrypt in seconds on a tiny VPS
 
+## CLI
+
+All the scripts under `scripts/` are also available as subcommands of a single `nimblenode` entry point, so you can run `./scripts/nimblenode <command> [args...]` instead of calling each script directly (both forms keep working):
+
+```
+./scripts/nimblenode help
+./scripts/nimblenode install
+./scripts/nimblenode create
+./scripts/nimblenode bos balance
+```
+
+To use it as a plain `nimblenode` command, symlink it into your `PATH` (run from the repo root):
+
+```
+sudo ln -s "$(pwd)/scripts/nimblenode" /usr/local/bin/nimblenode
+```
+
+Running it with no arguments (in a terminal) opens an interactive shell instead of exiting: type a command, see it run, and you're back at the prompt for the next one.
+
+```
+$ nimblenode
+...
+nimblenode> bos balance
+...
+nimblenode> getinfo
+...
+nimblenode> exit
+```
+
+### Adding the CLI to an already-running node
+
+`scripts/nimblenode` is a plain host-side script: it only calls the other scripts in `scripts/`, which talk to the already-running containers via `docker exec`. It is not baked into any Docker image, so on a node already in production you don't need to rebuild or restart any container — just update `scripts/`:
+
+```
+cd nimblenode
+git pull
+chmod +x scripts/nimblenode
+```
+
+Then use it right away (`./scripts/nimblenode help`, or symlink it as shown above).
+
 ## Quick install (guided)
 
 The fastest way is the guided installer, which checks prerequisites, prepares `.env`, starts the services, creates the wallet and optionally configures BOS, ThunderHub and the Telegram bot:
