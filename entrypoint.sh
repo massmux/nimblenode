@@ -46,6 +46,7 @@ lnd.protocol.wumbo-channels=true
 lnd.minchansize=1000000
 databasebackend=bbolt
 lnd.alias=${SETALIAS}
+lnd.rpcmiddleware.enable=true
 EOF
 
 # Network privacy mode. Defaults to clearnet to preserve the previous behaviour
