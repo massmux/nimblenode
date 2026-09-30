@@ -87,7 +87,7 @@ esac
 # Optional watchtower server (WATCHTOWER=true). With Tor active LND publishes
 # the tower on its own auto-generated onion, forwarded to lit's static IP, so
 # no host port is needed. In clearnet there is no onion: advertise the public
-# FQDN and publish 9911 via docker-compose.watchtower.yml (see README).
+# FQDN on port 9911 (published by docker-compose.yml, see README).
 if [ "${WATCHTOWER:-false}" = "true" ]; then
     cat >> lit.conf << EOF
 lnd.watchtower.active=true

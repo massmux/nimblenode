@@ -233,27 +233,17 @@ docker compose up -d --no-deps --force-recreate lit
 ./scripts/unlock
 ```
 
+On a node updated from an earlier version, the first `docker compose up -d` after `git pull` recreates `lit` anyway (its published ports changed), so unlock the wallet afterwards.
+
 ### Watchtower server with Tor (`hybrid` / `tor`)
 
-LND creates an onion address for the watchtower automatically and forwards it to lit's internal IP. No port needs to be published on the host and no firewall change is required.
+LND creates an onion address for the watchtower automatically and forwards it to lit's internal IP, so no firewall change is required. Since `docker-compose.yml` always publishes `9911`, the tower also answers on the VPS public IP (as the p2p port `9735` already does): in `tor` mode keep this in mind if you don't want the IP linked to the node.
 
 ### Watchtower server in clearnet mode
 
-Without Tor there is no onion address, so the tower is advertised on your `SETHOST` and port `9911` must be reachable from the Internet:
+Without Tor there is no onion address, so the tower is advertised on your `SETHOST` and port `9911` must be reachable from the Internet. `docker-compose.yml` always publishes `9911` on the host (nothing listens there while `WATCHTOWER` is off), so the only extra step is to allow `9911/tcp` in the provider's firewall, if your VPS has one, the same way as the p2p port `9735`.
 
-1. Publish the port on the host by enabling the compose override `docker-compose.watchtower.yml` in `.env` (every `docker compose` command, including the scripts, picks it up):
-
-   ```
-   COMPOSE_FILE=docker-compose.yml:docker-compose.watchtower.yml
-   ```
-
-2. Open the port in the VPS firewall (and in the provider's firewall, if any), e.g. with ufw:
-
-   ```
-   sudo ufw allow 9911/tcp
-   ```
-
-3. Recreate the container as shown above (`docker compose up -d --no-deps --force-recreate lit`, then `./scripts/unlock`).
+Note: ports published by Docker bypass `ufw`, so a `ufw deny` does not close them. To keep the tower private, simply leave `WATCHTOWER=false`.
 
 ### Your watchtower's address
 
