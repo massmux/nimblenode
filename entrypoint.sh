@@ -84,6 +84,29 @@ EOF
         ;;
 esac
 
+# Optional watchtower server (WATCHTOWER=true). With Tor active LND publishes
+# the tower on its own auto-generated onion, forwarded to lit's static IP, so
+# no host port is needed. In clearnet there is no onion: advertise the public
+# FQDN on port 9911 (published by docker-compose.yml, see README).
+if [ "${WATCHTOWER:-false}" = "true" ]; then
+    cat >> lit.conf << EOF
+lnd.watchtower.active=true
+lnd.watchtower.listen=0.0.0.0:9911
+EOF
+    case "${TOR_MODE:-clearnet}" in
+        tor|hybrid) ;;
+        *) echo "lnd.watchtower.externalip=${SETHOST}:9911" >> lit.conf ;;
+    esac
+fi
+
+# Optional watchtower client (WTCLIENT=true), independent of the server: back
+# up channel states to remote towers added at runtime with "wtclient add".
+if [ "${WTCLIENT:-false}" = "true" ]; then
+    cat >> lit.conf << EOF
+lnd.wtclient.active=true
+EOF
+fi
+
 # add the LND REST subdomain to the TLS cert only when configured
 if [ -n "${LND_HOST}" ]; then
     echo "lnd.tlsextradomain=${LND_HOST}" >> lit.conf

@@ -1,0 +1,53 @@
+#!/bin/bash
+
+###############################################################################
+# Nimble Node - Watchtower helpers (wraps lncli tower / wtclient)
+#
+# Usage: watchtower <info|add|towers|stats> [args]
+#   info                   Show this node's watchtower URIs (needs WATCHTOWER=true)
+#   add <pubkey@host:port> Register a remote watchtower (needs WTCLIENT=true)
+#   towers                 List the registered remote watchtowers
+#   stats                  Show the watchtower client statistics
+###############################################################################
+
+set -e
+
+usage() {
+    echo "Usage: watchtower <info|add|towers|stats> [args]"
+    echo "  info                   Show this node's watchtower URIs"
+    echo "  add <pubkey@host:port> Register a remote watchtower (one-time, stored in LND's db)"
+    echo "  towers                 List the registered remote watchtowers"
+    echo "  stats                  Show client stats (expect num_sessions_acquired > 0, num_failed_backups = 0)"
+}
+
+lncli() {
+    docker exec lit /app/lncli --network mainnet "$@"
+}
+
+case "$1" in
+    info)
+        lncli tower info
+        ;;
+    add)
+        if [ -z "$2" ]; then
+            echo "Missing tower address: watchtower add <pubkey>@<host>:9911" >&2
+            exit 1
+        fi
+        lncli wtclient add "$2"
+        echo "Tower added. Sessions may take 5-10 minutes to open; check with: watchtower stats"
+        ;;
+    towers)
+        lncli wtclient towers
+        ;;
+    stats)
+        lncli wtclient stats
+        ;;
+    ""|help|-h|--help)
+        usage
+        ;;
+    *)
+        echo "Unknown watchtower command: $1" >&2
+        usage >&2
+        exit 1
+        ;;
+esac

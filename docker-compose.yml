@@ -36,6 +36,9 @@ services:
         ports:
           - 10009:10009
           - 9735:9735
+          # LND watchtower (WATCHTOWER=true in .env); nothing listens here
+          # when the watchtower is disabled.
+          - 9911:9911
         networks:
           lan:
             # Static IP so Tor can forward the onion service to LND's p2p

@@ -2,6 +2,30 @@
 
 Setup a Lightning Neutrino Node with LIT and Letsencrypt in seconds on a tiny VPS
 
+## DNS and ports
+
+Before installing, point these names to the VPS public IP (they are set in `.env`):
+
+| `.env` variable | Example | Used for | Required |
+|---|---|---|---|
+| `SETHOST` | `node.example.com` | LiT web UI (8443 via nginx-proxy), LND public p2p address (`lnd.externalip`), LND TLS certificate and, in clearnet, the watchtower address (`SETHOST:9911`) | Yes |
+| `THUB_HOST` | `thunderhub.example.com` | ThunderHub web UI | Only with ThunderHub |
+| `LND_HOST` | `lnd.example.com` | LND REST API (8080) for apps such as Zeus or LNbits | Recommended |
+
+- Use an **A** record for `SETHOST`: LND resolves it to the IP it advertises to the Lightning network.
+- `THUB_HOST` and `LND_HOST` can be **A** records to the same IP or **CNAME**s to `SETHOST`; both work with Let's Encrypt (HTTP challenge on port 80).
+- Wait until DNS has propagated before starting the containers, otherwise acme-companion cannot obtain the certificates and LND cannot resolve `SETHOST`.
+- Tor and the watchtower need no extra DNS records: the watchtower uses `SETHOST`, and in `tor` / `hybrid` mode LND generates the `.onion` addresses itself.
+
+Ports to allow in the provider's firewall:
+
+| Port | Used for |
+|---|---|
+| 80, 443 | Web UIs and Let's Encrypt |
+| 9735 | Lightning p2p |
+| 10009 | LND gRPC, only if used from outside the VPS |
+| 9911 | Watchtower, only with `WATCHTOWER=true` in clearnet mode |
+
 ## CLI
 
 All the scripts under `scripts/` are also available as subcommands of a single `nimblenode` entry point, so you can run `./scripts/nimblenode <command> [args...]` instead of calling each script directly (both forms keep working):
@@ -17,6 +41,7 @@ All the scripts under `scripts/` are also available as subcommands of a single `
 ./scripts/nimblenode status         # container status (docker compose ps)
 ./scripts/nimblenode start          # start all containers (docker compose up -d)
 ./scripts/nimblenode stop           # stop all containers, keeping data (docker compose stop)
+./scripts/nimblenode watchtower stats  # watchtower client stats (also: info, add, towers)
 ```
 
 To use it as a plain `nimblenode` command, symlink it into your `PATH` (run from the repo root):
@@ -213,6 +238,76 @@ docker exec -ti lit lncli getinfo
 ```
 
 Look for the `.onion` entry under `uris`.
+
+## Watchtower
+
+LND can run a watchtower server (it watches the chain on behalf of other nodes and punishes channel breaches) and a watchtower client (it backs up your own channel states to remote towers). Both are optional and off by default. Enable them in `.env`:
+
+- `WATCHTOWER=true`: runs the watchtower server, listening on port `9911`.
+- `WTCLIENT=true`: runs the watchtower client. It is independent of the server, so you can enable only the client to use an external watchtower.
+
+Absent or `false`, the generated configuration is unchanged.
+
+### Apply the change
+
+Always edit `.env` (the switches are read by `entrypoint.sh`), never `.lit/lit.conf`: it is regenerated from scratch at every start of the `lit` container. No image rebuild is needed; from the project folder recreate the container and unlock the wallet again:
+
+```
+docker compose up -d --no-deps --force-recreate lit
+./scripts/unlock
+```
+
+On a node updated from an earlier version, the first `docker compose up -d` after `git pull` recreates `lit` anyway (its published ports changed), so unlock the wallet afterwards.
+
+### Watchtower server with Tor (`hybrid` / `tor`)
+
+LND creates an onion address for the watchtower automatically and forwards it to lit's internal IP, so no firewall change is required. Since `docker-compose.yml` always publishes `9911`, the tower also answers on the VPS public IP (as the p2p port `9735` already does): in `tor` mode keep this in mind if you don't want the IP linked to the node.
+
+### Watchtower server in clearnet mode
+
+Without Tor there is no onion address, so the tower is advertised on your `SETHOST` and port `9911` must be reachable from the Internet. `docker-compose.yml` always publishes `9911` on the host (nothing listens there while `WATCHTOWER` is off), so the only extra step is to allow `9911/tcp` in the provider's firewall, if your VPS has one, the same way as the p2p port `9735`.
+
+Note: ports published by Docker bypass `ufw`, so a `ufw deny` does not close them. To keep the tower private, simply leave `WATCHTOWER=false`.
+
+### Your watchtower's address
+
+Share this with the nodes you want to protect:
+
+```
+docker exec lit /app/lncli --network mainnet tower info
+```
+
+The `uris` field lists `<pubkey>@<host>:9911` (the `.onion` host with Tor, your `SETHOST` in clearnet).
+
+### Use a remote watchtower (client)
+
+With `WTCLIENT=true`, register a remote tower:
+
+```
+docker exec lit /app/lncli --network mainnet wtclient add <pubkey>@<host>:9911
+```
+
+This is a one-time runtime step: the registration is stored in LND's database and does not go into the configuration. Onion towers work in `hybrid` and `tor` modes.
+
+Check that it works:
+
+```
+docker exec lit /app/lncli --network mainnet wtclient towers
+docker exec lit /app/lncli --network mainnet wtclient stats
+```
+
+In `stats`, expect `num_sessions_acquired` greater than 0 and `num_failed_backups` equal to 0.
+
+The same commands are available through the CLI:
+
+```
+./scripts/nimblenode watchtower info                        # tower info
+./scripts/nimblenode watchtower add <pubkey>@<host>:9911    # wtclient add
+./scripts/nimblenode watchtower towers                      # wtclient towers
+./scripts/nimblenode watchtower stats                       # wtclient stats
+```
+
+Note: when a tower is added while the node is already running, the client can take 5–10 minutes to open its sessions because of the back-off between attempts. This is normal.
 
 ## Maintenance
 
