@@ -2,6 +2,30 @@
 
 Setup a Lightning Neutrino Node with LIT and Letsencrypt in seconds on a tiny VPS
 
+## DNS and ports
+
+Before installing, point these names to the VPS public IP (they are set in `.env`):
+
+| `.env` variable | Example | Used for | Required |
+|---|---|---|---|
+| `SETHOST` | `node.example.com` | LiT web UI (8443 via nginx-proxy), LND public p2p address (`lnd.externalip`), LND TLS certificate and, in clearnet, the watchtower address (`SETHOST:9911`) | Yes |
+| `THUB_HOST` | `thunderhub.example.com` | ThunderHub web UI | Only with ThunderHub |
+| `LND_HOST` | `lnd.example.com` | LND REST API (8080) for apps such as Zeus or LNbits | Recommended |
+
+- Use an **A** record for `SETHOST`: LND resolves it to the IP it advertises to the Lightning network.
+- `THUB_HOST` and `LND_HOST` can be **A** records to the same IP or **CNAME**s to `SETHOST`; both work with Let's Encrypt (HTTP challenge on port 80).
+- Wait until DNS has propagated before starting the containers, otherwise acme-companion cannot obtain the certificates and LND cannot resolve `SETHOST`.
+- Tor and the watchtower need no extra DNS records: the watchtower uses `SETHOST`, and in `tor` / `hybrid` mode LND generates the `.onion` addresses itself.
+
+Ports to allow in the provider's firewall:
+
+| Port | Used for |
+|---|---|
+| 80, 443 | Web UIs and Let's Encrypt |
+| 9735 | Lightning p2p |
+| 10009 | LND gRPC, only if used from outside the VPS |
+| 9911 | Watchtower, only with `WATCHTOWER=true` in clearnet mode |
+
 ## CLI
 
 All the scripts under `scripts/` are also available as subcommands of a single `nimblenode` entry point, so you can run `./scripts/nimblenode <command> [args...]` instead of calling each script directly (both forms keep working):
