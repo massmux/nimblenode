@@ -17,6 +17,7 @@ All the scripts under `scripts/` are also available as subcommands of a single `
 ./scripts/nimblenode status         # container status (docker compose ps)
 ./scripts/nimblenode start          # start all containers (docker compose up -d)
 ./scripts/nimblenode stop           # stop all containers, keeping data (docker compose stop)
+./scripts/nimblenode watchtower stats  # watchtower client stats (also: info, add, towers)
 ```
 
 To use it as a plain `nimblenode` command, symlink it into your `PATH` (run from the repo root):
@@ -282,6 +283,15 @@ docker exec lit /app/lncli --network mainnet wtclient stats
 ```
 
 In `stats`, expect `num_sessions_acquired` greater than 0 and `num_failed_backups` equal to 0.
+
+The same commands are available through the CLI:
+
+```
+./scripts/nimblenode watchtower info                        # tower info
+./scripts/nimblenode watchtower add <pubkey>@<host>:9911    # wtclient add
+./scripts/nimblenode watchtower towers                      # wtclient towers
+./scripts/nimblenode watchtower stats                       # wtclient stats
+```
 
 Note: when a tower is added while the node is already running, the client can take 5–10 minutes to open its sessions because of the back-off between attempts. This is normal.
 
