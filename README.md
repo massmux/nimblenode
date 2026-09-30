@@ -214,6 +214,77 @@ docker exec -ti lit lncli getinfo
 
 Look for the `.onion` entry under `uris`.
 
+## Watchtower
+
+LND can run a watchtower server (it watches the chain on behalf of other nodes and punishes channel breaches) and a watchtower client (it backs up your own channel states to remote towers). Both are optional and off by default. Enable them in `.env`:
+
+- `WATCHTOWER=true`: runs the watchtower server, listening on port `9911`.
+- `WTCLIENT=true`: runs the watchtower client. It is independent of the server, so you can enable only the client to use an external watchtower.
+
+Absent or `false`, the generated configuration is unchanged.
+
+### Apply the change
+
+Always edit `.env` (the switches are read by `entrypoint.sh`), never `.lit/lit.conf`: it is regenerated from scratch at every start of the `lit` container. No image rebuild is needed; from the project folder recreate the container and unlock the wallet again:
+
+```
+docker compose up -d --no-deps --force-recreate lit
+./scripts/unlock
+```
+
+### Watchtower server with Tor (`hybrid` / `tor`)
+
+LND creates an onion address for the watchtower automatically and forwards it to lit's internal IP. No port needs to be published on the host and no firewall change is required.
+
+### Watchtower server in clearnet mode
+
+Without Tor there is no onion address, so the tower is advertised on your `SETHOST` and port `9911` must be reachable from the Internet:
+
+1. Publish the port on the host by enabling the compose override `docker-compose.watchtower.yml` in `.env` (every `docker compose` command, including the scripts, picks it up):
+
+   ```
+   COMPOSE_FILE=docker-compose.yml:docker-compose.watchtower.yml
+   ```
+
+2. Open the port in the VPS firewall (and in the provider's firewall, if any), e.g. with ufw:
+
+   ```
+   sudo ufw allow 9911/tcp
+   ```
+
+3. Recreate the container as shown above (`docker compose up -d --no-deps --force-recreate lit`, then `./scripts/unlock`).
+
+### Your watchtower's address
+
+Share this with the nodes you want to protect:
+
+```
+docker exec lit /app/lncli --network mainnet tower info
+```
+
+The `uris` field lists `<pubkey>@<host>:9911` (the `.onion` host with Tor, your `SETHOST` in clearnet).
+
+### Use a remote watchtower (client)
+
+With `WTCLIENT=true`, register a remote tower:
+
+```
+docker exec lit /app/lncli --network mainnet wtclient add <pubkey>@<host>:9911
+```
+
+This is a one-time runtime step: the registration is stored in LND's database and does not go into the configuration. Onion towers work in `hybrid` and `tor` modes.
+
+Check that it works:
+
+```
+docker exec lit /app/lncli --network mainnet wtclient towers
+docker exec lit /app/lncli --network mainnet wtclient stats
+```
+
+In `stats`, expect `num_sessions_acquired` greater than 0 and `num_failed_backups` equal to 0.
+
+Note: when a tower is added while the node is already running, the client can take 5–10 minutes to open its sessions because of the back-off between attempts. This is normal.
+
 ## Maintenance
 
 Just connect to your running container with
