@@ -165,7 +165,11 @@ echo ""
 ###############################################################################
 print_step "Starting ThunderHub and reverse proxy containers..."
 
-if docker compose up -d thunderhub nginx-proxy acme-companion; then
+# Always recreate ThunderHub: if it was already running (e.g. started by a
+# plain "docker compose up" before this script), it is still bound to the
+# stray thubConfig.yaml directory and would not see the new file.
+if docker compose up -d --force-recreate thunderhub \
+    && docker compose up -d nginx-proxy acme-companion; then
     print_success "Containers started"
 else
     print_error "Failed to start containers"
