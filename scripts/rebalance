@@ -1,0 +1,322 @@
+#!/usr/bin/env bash
+# nn-rebalance.sh — circular rebalance of LND channels (NimbleNode)
+#
+# Moves outbound liquidity from one channel (FROM) to another (TO): the node
+# pays one of its own invoices, forcing the payment out of the FROM channel and
+# back in through the peer of the TO channel. Local balance drops on FROM and
+# rises on TO.
+#
+# Modes:
+#   list                          list channels with their liquidity
+#   test  -f FROM -t TO -a AMT    estimate cost and verify the path (no payment sent)
+#   run   -f FROM -t TO -a AMT    execute the rebalance and report the outcome
+#
+# FROM/TO: numeric scid, chan_id, peer pubkey or alias (partial match allowed).
+# AMT: sats; k/m suffixes accepted (e.g. 500k, 3m).
+#
+# Requirements: docker, jq. By default it uses "docker exec lit /app/lncli";
+# override with NN_LNCLI (e.g. NN_LNCLI="lncli --network=mainnet").
+#
+# Exit codes: 0 ok, 1 error/aborted, 2 usage, 3 no route or preconditions
+# failed (no payment sent), 4 payment failed.
+
+set -euo pipefail
+
+NN_LNCLI="${NN_LNCLI:-docker exec lit /app/lncli}"
+read -ra LNCLI <<<"$NN_LNCLI"
+
+FEE_PPM_DEFAULT=1000   # default fee cap: 0.1% of the amount
+TIMEOUT_DEFAULT=120
+
+log() { printf '%s\n' "$*" >&2; }
+die() { log "ERROR: $*"; exit 1; }
+
+usage() {
+    cat >&2 <<EOF
+Usage:
+  $0 list
+  $0 test -f FROM -t TO -a AMOUNT [-p PPM | -F SATS]
+  $0 run  -f FROM -t TO -a AMOUNT [-p PPM | -F SATS] [-T SECONDS] [-y]
+
+  -f FROM      source channel (scid, chan_id, peer pubkey or alias)
+  -t TO        destination channel
+  -a AMOUNT    sats (k/m suffixes allowed: 500k, 3m)
+  -p PPM       fee cap in ppm of the amount (default $FEE_PPM_DEFAULT)
+  -F SATS      absolute fee cap in sats (alternative to -p)
+  -T SECONDS   payment timeout (default $TIMEOUT_DEFAULT)
+  -y           do not ask for confirmation in run mode
+EOF
+    exit 2
+}
+
+lncli() { "${LNCLI[@]}" "$@"; }
+
+check_prereq() {
+    command -v jq >/dev/null || die "jq not found"
+    "${LNCLI[0]}" --version >/dev/null 2>&1 || die "command not available: ${LNCLI[0]}"
+    lncli getinfo >/dev/null 2>&1 || die "lncli not responding (${NN_LNCLI})"
+}
+
+parse_amount() {
+    local v="${1,,}"
+    case "$v" in
+        *k) v=$(( ${v%k} * 1000 )) ;;
+        *m) v=$(( ${v%m} * 1000000 )) ;;
+    esac
+    [[ "$v" =~ ^[0-9]+$ && "$v" -gt 0 ]] || die "invalid amount: $1"
+    echo "$v"
+}
+
+fmt() { # 1234567 -> 1.234.567
+    printf '%s' "$1" | sed -e :a -e 's/\(.*[0-9]\)\([0-9]\{3\}\)/\1.\2/;ta'
+}
+
+# Channels as JSON, with a normalized scid (some builds expose chan_id as hex)
+channels_json() {
+    lncli listchannels | jq -c '[.channels[] | {
+        scid: (.scid // .chan_id),
+        chan_id: .chan_id,
+        pubkey: .remote_pubkey,
+        alias: (.peer_alias // ""),
+        cap: (.capacity|tonumber),
+        local: (.local_balance|tonumber),
+        remote: (.remote_balance|tonumber),
+        active: .active,
+        local_reserve: ((.local_constraints.chan_reserve_sat // .local_chan_reserve_sat // 0)|tonumber),
+        remote_reserve: ((.remote_constraints.chan_reserve_sat // .remote_chan_reserve_sat // 0)|tonumber)
+    }]'
+}
+
+cmd_list() {
+    channels_json | jq -r '
+        sort_by(-.local)
+        | (["SCID","PEER","CAPACITY","LOCAL","REMOTE","%LOC","STATE"] | @tsv),
+          (.[] | [.scid, (if .alias == "" then .pubkey[0:16] else .alias end),
+                  .cap, .local, .remote, ((.local*100/.cap)|floor), (if .active then "ok" else "OFFLINE" end)] | @tsv)' |
+        awk -F'\t' '
+            function f(n,  s) { s = sprintf("%d", n); while (s ~ /[0-9]{4}/) sub(/[0-9]{3}($|\.)/, ".&", s); return s }
+            NR==1 { printf "%-20s %-28s %12s %12s %12s %5s %s\n", $1,$2,$3,$4,$5,$6,$7; next }
+            { printf "%-20s %-28s %12s %12s %12s %4s%% %s\n", $1,substr($2,1,28),f($3),f($4),f($5),$6,$7;
+              tl+=$4; tr+=$5 }
+            END { printf "\nTotal local: %s sats   Total remote: %s sats\n", f(tl), f(tr) }'
+}
+
+# Resolve a selector to a channel object; fail if missing or ambiguous
+resolve_channel() {
+    local sel="$1" all="$2" out n
+    out=$(jq -c --arg s "$sel" '
+        ($s|ascii_downcase) as $q
+        | [ .[] | select(.scid == $s or .chan_id == $s or .pubkey == $s) ] as $exact
+        | if ($exact|length) > 0 then $exact
+          else [ .[] | select(.alias|ascii_downcase|contains($q)) ] end' <<<"$all")
+    n=$(jq 'length' <<<"$out")
+    if [[ "$n" -eq 0 ]]; then
+        die "no channel matches '$sel' (try: $0 list)"
+    elif [[ "$n" -gt 1 ]]; then
+        log "ERROR: '$sel' is ambiguous, $n channels match:"
+        jq -r '.[] | "  \(.scid)  \(.alias)  local=\(.local) remote=\(.remote)"' <<<"$out" >&2
+        exit 1
+    fi
+    jq -c '.[0]' <<<"$out"
+}
+
+node_alias() { # pubkey -> alias
+    local pk="$1"
+    lncli getnodeinfo "$pk" 2>/dev/null | jq -r --arg pk "$pk" '.node.alias // $pk[0:16]' || echo "${pk:0:16}"
+}
+
+# Fee (msat) the TO peer charges to forward AMT sats to us over the TO channel
+last_hop_fee_msat() {
+    local scid="$1" peer="$2" amt="$3"
+    lncli getchaninfo "$scid" 2>/dev/null | jq -r --arg peer "$peer" --argjson amt "$amt" '
+        (if .node1_pub == $peer then .node1_policy else .node2_policy end) as $p
+        | (($p.fee_base_msat|tonumber) + (($amt * 1000 * ($p.fee_rate_milli_msat|tonumber)) / 1000000 | floor))' ||
+        echo 0
+}
+
+check_liquidity() { # $1=FROM json, $2=TO json, $3=amt, $4=estimated fee (sats)
+    local from="$1" to="$2" amt="$3" fee="$4" ok=0
+    jq -e '.active' <<<"$from" >/dev/null || { log "FAIL: FROM channel is offline"; ok=1; }
+    jq -e '.active' <<<"$to"   >/dev/null || { log "FAIL: TO channel is offline"; ok=1; }
+    local spend recv
+    spend=$(jq -r '.local - .local_reserve' <<<"$from")
+    recv=$(jq -r '.remote - .remote_reserve' <<<"$to")
+    if (( spend < amt + fee )); then
+        log "FAIL: spendable outbound on FROM $(fmt "$spend") < amount+fee $(fmt $((amt + fee)))"; ok=1
+    fi
+    if (( recv < amt )); then
+        log "FAIL: available inbound on TO $(fmt "$recv") < amount $(fmt "$amt")"; ok=1
+    fi
+    return $ok
+}
+
+# Estimate path and cost; sets EST_FEE_SAT, ROUTE_DESC, ROUTE_HOPS. Returns 1 if no route.
+estimate() { # $1=FROM json, $2=TO json, $3=amt, $4=fee_limit
+    local from="$1" to="$2" amt="$3" limit="$4"
+    local from_scid to_scid peer last_msat deliver_to_peer q
+    from_scid=$(jq -r .scid <<<"$from"); to_scid=$(jq -r .scid <<<"$to")
+    peer=$(jq -r .pubkey <<<"$to")
+
+    last_msat=$(last_hop_fee_msat "$to_scid" "$peer" "$amt")
+    deliver_to_peer=$(( amt + (last_msat + 999) / 1000 ))
+
+    # Route us -> TO peer leaving via the FROM channel; the last hop (peer -> us) is added separately
+    q=$(lncli queryroutes --dest "$peer" --amt "$deliver_to_peer" \
+        --outgoing_chan_id "$from_scid" --fee_limit "$limit" 2>&1) || true
+    if ! jq -e '.routes[0]' <<<"$q" >/dev/null 2>&1; then
+        ROUTE_ERR=$(printf '%s' "$q" | head -c 200)
+        return 1
+    fi
+
+    local route_msat
+    route_msat=$(jq -r '.routes[0] | (.total_fees_msat // ((.total_fees|tonumber)*1000)) | tonumber' <<<"$q")
+    EST_FEE_SAT=$(( (route_msat + last_msat + 999) / 1000 ))
+
+    local desc="self" pk
+    while read -r pk; do desc+=" -> $(node_alias "$pk")"; done < <(jq -r '.routes[0].hops[].pub_key' <<<"$q")
+    ROUTE_DESC="$desc -> self"
+    ROUTE_HOPS=$(jq -r '.routes[0].hops | length' <<<"$q")
+}
+
+report_estimate() { # $1=amt
+    local amt="$1" ppm
+    ppm=$(( EST_FEE_SAT * 1000000 / amt ))
+    log "Path:          $ROUTE_DESC"
+    log "Outbound hops: $ROUTE_HOPS"
+    log "Estimated fee: $(fmt "$EST_FEE_SAT") sats (~${ppm} ppm)"
+}
+
+cmd_test_or_run() {
+    local mode="$1"; shift
+    local from_sel="" to_sel="" amt_in="" ppm="$FEE_PPM_DEFAULT" fee_abs="" tmo="$TIMEOUT_DEFAULT" yes=0 opt
+    OPTIND=1
+    while getopts "f:t:a:p:F:T:yh" opt; do
+        case "$opt" in
+            f) from_sel="$OPTARG" ;;
+            t) to_sel="$OPTARG" ;;
+            a) amt_in="$OPTARG" ;;
+            p) ppm="$OPTARG" ;;
+            F) fee_abs="$OPTARG" ;;
+            T) tmo="$OPTARG" ;;
+            y) yes=1 ;;
+            *) usage ;;
+        esac
+    done
+    [[ -n "$from_sel" && -n "$to_sel" && -n "$amt_in" ]] || usage
+    [[ "$ppm" =~ ^[0-9]+$ && "$tmo" =~ ^[0-9]+$ ]] || die "-p and -T must be integers"
+
+    local amt all from to
+    amt=$(parse_amount "$amt_in")
+    all=$(channels_json)
+    from=$(resolve_channel "$from_sel" "$all")
+    to=$(resolve_channel "$to_sel" "$all")
+
+    local from_scid to_scid from_peer to_peer from_name to_name
+    from_scid=$(jq -r .scid <<<"$from"); to_scid=$(jq -r .scid <<<"$to")
+    from_peer=$(jq -r .pubkey <<<"$from"); to_peer=$(jq -r .pubkey <<<"$to")
+    from_name=$(jq -r '.alias' <<<"$from"); to_name=$(jq -r '.alias' <<<"$to")
+    [[ "$from_scid" != "$to_scid" ]] || die "FROM and TO are the same channel"
+    if [[ "$from_peer" == "$to_peer" ]]; then
+        die "FROM and TO share the same peer ($from_name): last_hop cannot tell channels apart, the payment may come back through the same channel"
+    fi
+
+    local fee_limit
+    if [[ -n "$fee_abs" ]]; then
+        [[ "$fee_abs" =~ ^[0-9]+$ ]] || die "-F must be an integer"
+        fee_limit="$fee_abs"
+    else
+        fee_limit=$(( (amt * ppm + 999999) / 1000000 )); (( fee_limit >= 1 )) || fee_limit=1
+    fi
+
+    local n_to
+    n_to=$(jq --arg p "$to_peer" '[.[] | select(.pubkey == $p)] | length' <<<"$all")
+    if (( n_to > 1 )); then
+        log "WARNING: $to_name has $n_to channels with us: the payment may arrive on a channel other than $to_scid"
+    fi
+
+    log "From:    $from_scid  $from_name  (local $(fmt "$(jq -r .local <<<"$from")"))"
+    log "To:      $to_scid  $to_name  (remote $(fmt "$(jq -r .remote <<<"$to")"))"
+    log "Amount:  $(fmt "$amt") sats   Fee cap: $(fmt "$fee_limit") sats"
+
+    ROUTE_ERR=""; EST_FEE_SAT=0; ROUTE_DESC=""; ROUTE_HOPS=0
+    if ! estimate "$from" "$to" "$amt" "$fee_limit"; then
+        log "RESULT: no route within the fee cap${ROUTE_ERR:+ ($ROUTE_ERR)}"
+        exit 3
+    fi
+    report_estimate "$amt"
+
+    local rc=0
+    check_liquidity "$from" "$to" "$amt" "$EST_FEE_SAT" || rc=$?
+    if (( EST_FEE_SAT > fee_limit )); then
+        log "FAIL: estimated fee $(fmt "$EST_FEE_SAT") > cap $(fmt "$fee_limit")"; rc=1
+    fi
+
+    if [[ "$mode" == "test" ]]; then
+        if (( rc == 0 )); then log "RESULT: TEST OK — route found, rebalance feasible"; exit 0; fi
+        log "RESULT: TEST FAILED"; exit 3
+    fi
+
+    (( rc == 0 )) || { log "RESULT: preconditions not met, no payment sent"; exit 3; }
+
+    if (( yes == 0 )); then
+        [[ -t 0 ]] || die "confirmation required but stdin is not a terminal: use -y"
+        read -r -p "Execute rebalance of $(fmt "$amt") sats? [y/N] " ans
+        [[ "$ans" =~ ^[yY]$ ]] || { log "Aborted."; exit 1; }
+    fi
+    execute "$from" "$to" "$amt" "$fee_limit" "$tmo"
+}
+
+execute() { # $1=FROM json, $2=TO json, $3=amt, $4=fee_limit, $5=timeout
+    local from="$1" to="$2" amt="$3" limit="$4" tmo="$5"
+    local from_scid to_scid peer inv pr hash out state
+    from_scid=$(jq -r .scid <<<"$from"); to_scid=$(jq -r .scid <<<"$to")
+    peer=$(jq -r .pubkey <<<"$to")
+
+    inv=$(lncli addinvoice --amt "$amt" --memo "nn-rebalance $from_scid->$to_scid")
+    pr=$(jq -r .payment_request <<<"$inv"); hash=$(jq -r .r_hash <<<"$inv")
+    [[ -n "$pr" && "$pr" != null ]] || die "invoice creation failed"
+    log "Invoice created (hash $hash), sending payment..."
+
+    out=$(lncli payinvoice --pay_req "$pr" --outgoing_chan_id "$from_scid" \
+        --last_hop "$peer" --allow_self_payment --fee_limit "$limit" \
+        --timeout "${tmo}s" --force 2>&1 | tr '\r' '\n') || true
+
+    # Success is decided by the invoice state, not by parsing the progress output
+    state=$(lncli lookupinvoice "$hash" 2>/dev/null | jq -r '.state // "UNKNOWN"') || state=UNKNOWN
+    local fee_paid status reason
+    fee_paid=$(grep -oE 'Amount \+ fee: *[0-9]+ \+ [0-9.]+' <<<"$out" | tail -1 | awk '{print $NF}') || true
+    status=$(grep -E 'Payment status:' <<<"$out" | tail -1 | sed 's/^ *//') || true
+    reason=$(grep -iE 'failure reason' <<<"$out" | tail -1) || true
+
+    local after fa ta
+    after=$(channels_json)
+    fa=$(jq -r --arg s "$from_scid" '.[] | select(.scid==$s) | .local' <<<"$after")
+    ta=$(jq -r --arg s "$to_scid" '.[] | select(.scid==$s) | .local' <<<"$after")
+
+    if [[ "$state" == "SETTLED" ]]; then
+        log "RESULT: SUCCESS — moved $(fmt "$amt") sats, fee ${fee_paid:-?} sats"
+        log "FROM $from_scid: local $(fmt "$(jq -r .local <<<"$from")") -> $(fmt "$fa")"
+        log "TO   $to_scid: local $(fmt "$(jq -r .local <<<"$to")") -> $(fmt "$ta")"
+        exit 0
+    fi
+    log "RESULT: FAILED — no funds moved (invoice $state)"
+    [[ -n "$status" ]] && log "$status"
+    [[ -n "$reason" ]] && log "$reason"
+    log "lncli output (last lines):"; tail -5 <<<"$out" >&2
+    exit 4
+}
+
+main() {
+    [[ $# -ge 1 ]] || usage
+    local cmd="$1"; shift
+    case "$cmd" in
+        list|test|run) check_prereq ;;
+        *) usage ;;
+    esac
+    case "$cmd" in
+        list) cmd_list ;;
+        test|run) cmd_test_or_run "$cmd" "$@" ;;
+    esac
+}
+
+main "$@"

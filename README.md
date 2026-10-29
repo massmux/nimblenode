@@ -42,6 +42,9 @@ All the scripts under `scripts/` are also available as subcommands of a single `
 ./scripts/nimblenode start          # start all containers (docker compose up -d)
 ./scripts/nimblenode stop           # stop all containers, keeping data (docker compose stop)
 ./scripts/nimblenode watchtower stats  # watchtower client stats (also: info, add, towers)
+./scripts/nimblenode rebalance list   # channels with local/remote liquidity
+./scripts/nimblenode rebalance test -f bfx-lnd0 -t kraken -a 1m   # estimate cost and check the path (no payment)
+./scripts/nimblenode rebalance run -f bfx-lnd0 -t kraken -a 1m    # execute the circular rebalance
 ```
 
 To use it as a plain `nimblenode` command, symlink it into your `PATH` (run from the repo root):
