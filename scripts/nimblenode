@@ -33,6 +33,7 @@ Containers:
   status             Show the status of all containers
   start              Start all containers (docker compose up -d)
   stop               Stop all containers without removing them or their data
+  update [-y]        Stop containers, pull latest images, restart (wallet must be unlocked afterwards)
 
 Services:
   bos <args...>      Balance of Satoshis wrapper (e.g. nimblenode bos balance)
@@ -61,7 +62,7 @@ run_command() {
     local cmd="$1"
     shift
     case "$cmd" in
-        install|create|reset|initbos|initbostelegram|initthub|mkmacaroon|refreshcreds|bos|getinfo|unlock|grpc|logs|status|start|stop|watchtower|rebalance)
+        install|create|reset|initbos|initbostelegram|initthub|mkmacaroon|refreshcreds|bos|getinfo|unlock|grpc|logs|status|start|stop|update|watchtower|rebalance)
             "$SCRIPT_DIR/$cmd" "$@"
             ;;
         help|-h|--help)

@@ -1,0 +1,76 @@
+#!/bin/bash
+
+###############################################################################
+# Nimble Node - Update to the latest images
+#
+# Stops all containers, pulls the latest version of every image, then
+# starts the stack again. Data (volumes, .lnd, ...) is preserved.
+#
+# NOTE: after the restart the LND wallet is locked and must be unlocked
+# manually with `nimblenode unlock` (or ./scripts/unlock).
+#
+# Use -y to skip the confirmation prompt.
+###############################################################################
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+cd "$PROJECT_DIR"
+
+# Abort if variables used by docker-compose.yml are missing or empty in .env:
+# compose would silently default them to a blank string and the stack
+# (reverse proxy, ThunderHub, Let's Encrypt) would be started misconfigured.
+missing=()
+for var in SETHOST THUB_HOST LND_HOST LETSENCRYPT_EMAIL; do
+    if ! grep -qE "^[[:space:]]*(export[[:space:]]+)?${var}=[^[:space:]\"']" .env 2>/dev/null &&
+       ! grep -qE "^[[:space:]]*(export[[:space:]]+)?${var}=[\"'][^\"']+[\"']" .env 2>/dev/null; then
+        missing+=("$var")
+    fi
+done
+if [ ${#missing[@]} -gt 0 ]; then
+    echo "ERROR: the following variables are missing or empty in .env:" >&2
+    printf '  - %s\n' "${missing[@]}" >&2
+    echo "Set them in .env and run the update again. Nothing has been stopped." >&2
+    exit 1
+fi
+
+cat <<MSG
+==============================================================================
+ WARNING
+==============================================================================
+ This will STOP all Nimble Node containers, pull the latest images and
+ start everything again.
+
+ While the containers are down the node is offline.
+
+ When the containers come back up the wallet will be LOCKED. You will need
+ to unlock it with:
+
+     nimblenode unlock      (or ./scripts/unlock)
+
+ and enter your wallet unlock password.
+==============================================================================
+MSG
+
+if [ "$1" != "-y" ]; then
+    [ -t 0 ] || { echo "Confirmation required but stdin is not a terminal: use -y" >&2; exit 1; }
+    read -r -p "Continue? [y/N] " ans
+    case "$ans" in
+        y|Y|yes|YES) ;;
+        *) echo "Aborted."; exit 1 ;;
+    esac
+fi
+
+echo "Stopping containers .."
+docker compose stop
+
+echo "Pulling latest images .."
+docker compose pull
+
+echo "Starting containers .."
+docker compose up -d
+
+echo
+echo "Update complete. Remember to unlock the wallet now:"
+echo "    nimblenode unlock"
